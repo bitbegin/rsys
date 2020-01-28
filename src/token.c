@@ -131,11 +131,99 @@ uint32_t get_char(const char* s, char* r, uint32_t *len) {
 	return 1;
 }
 
-uint32_t match_char(pTSymbol sym) {
+uint32_t get_cchar(const char* s, char* r, uint32_t *len) {
+	if (s[0] == '\\') {
+		if (s[1] == 'x') {
+			if (is_hex(s[2]) && is_hex(s[3])) {
+				*r = ((s[2] & 15) + (s[2] >= 'A' ? 9 : 0)) * 16 + (s[3] & 15) + (s[3] >= 'A' ? 9 : 0);
+				*len = 4;
+				return 1;
+			}
+			*len = 2;
+			return 0;
+		}
+		if (s[1] == 'a') {
+			*r = '\x07';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 'b') {
+			*r = '\x08';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 'e') {
+			*r = '\x1b';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 'f') {
+			*r = '\x0c';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 'n') {
+			*r = '\x0a';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 'r') {
+			*r = '\x0d';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 't') {
+			*r = '\x09';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == 'v') {
+			*r = '\x0b';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '\\') {
+			*r = '\x5c';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '\'') {
+			*r = '\x27';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '\"') {
+			*r = '\x22';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '?') {
+			*r = '\x3f';
+			*len = 2;
+			return 1;
+		}
+		*r = s[1];
+		*len = 2;
+		return 1;
+	}
+	*r = s[0];
+	*len = 1;
+	return 1;
+}
+
+uint32_t match_char(pTSymbol sym, uint32_t c_char) {
 	uint32_t len, res;
 	char c;
-	sym->Token = LitChar;
-	res = get_char(src + 1, &sym->Value.Char, &len);
+	if (c_char) {
+		sym->Token = LitCChar;
+	} else {
+		sym->Token = LitChar;
+	}
+	if (c_char) {
+		res = get_cchar(src + 1, &sym->Value.Char, &len);
+	} else {
+		res = get_char(src + 1, &sym->Value.Char, &len);
+	}
 	src = src + len + 1;
 	if (res == 1) {
 		if (src[0] == '"') {
@@ -392,13 +480,21 @@ uint32_t match_hex(pTSymbol sym) {
 	return match_separate(sym);
 }
 
-uint32_t match_string(pTSymbol sym) {
+uint32_t match_string(pTSymbol sym, uint32_t c_string) {
 	char* s = malloc(128);
 	char c;
 	uint32_t count = 0, len, res;
-	sym->Token = LitString;
+	if (c_string) {
+		sym->Token = LitCString;
+	} else {
+		sym->Token = LitString;
+	}
 	while(1) {
-		res = get_char(src, &c, &len);
+		if (c_string) {
+			res = get_cchar(src, &c, &len);
+		} else {
+			res = get_char(src, &c, &len);
+		}
 		src = src + len;
 		if (res == 0) {
 			while (!is_line(*src) && *src != '"') {
@@ -433,11 +529,6 @@ uint32_t match_string(pTSymbol sym) {
 	return 1;
 }
 
-uint32_t match_cstring(pTSymbol sym) {
-
-	return 1;
-}
-
 void init(char* c) {
 	src = c;
 }
@@ -461,7 +552,7 @@ TSymbol next(void) {
 
 		if (c == '#') {
 			if (src[0] == '"') {
-				match_char(&sym);
+				match_char(&sym, 0);
 				return sym;
 			}
 			if (is_first_word(src[0])) {
@@ -488,21 +579,24 @@ TSymbol next(void) {
 		}
 
 		if (c == '0' && src[0] == '#') {
-			if (match_hex(&sym) || sym.Error) {
-				return sym;
-			}
+			match_hex(&sym);
+			return sym;
 		}
 
 		if (c == '"') {
-			if (match_string(&sym) || sym.Error) {
-				return sym;
-			}
+			match_string(&sym, 0);
+			return sym;
 		}
 
 		if (c == '@' && src[0] == '"') {
-			if (match_cstring(&sym) || sym.Error) {
-				return sym;
-			}
+			src++;
+			match_string(&sym, 1);
+			return sym;
+		}
+
+		if (c == '+' && src[0] == '"') {
+			match_char(&sym, 1);
+			return sym;
 		}
 
 		if (c == '(') {
@@ -558,6 +652,14 @@ void display(pTSymbol sym) {
 		printf("%s: %s\n", get_name(sym->Token), sym->Value.data);
 		return;
 	}
+	if (sym->Token == LitCChar) {
+		printf("%s: %X, <%c>\n", get_name(sym->Token), sym->Value.Char, sym->Value.Char);
+		return;
+	}
+	if (sym->Token == LitCString) {
+		printf("%s: %s\n", get_name(sym->Token), sym->Value.data);
+		return;
+	}
 	if (sym->Token == LitU8) {
 		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u8, sym->Value.u8);
 		return;
@@ -586,8 +688,12 @@ char* get_name(uint32_t t) {
 	{
 	case LitChar:
 		return "LitChar";
+	case LitCChar:
+		return "LitCChar";
 	case LitString:
 		return "LitString";
+	case LitCString:
+		return "LitCString";
 	case LitU8:
 		return "LitU8";
 	case LitU16:
