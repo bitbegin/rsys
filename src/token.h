@@ -4,11 +4,12 @@
 #include <stdint.h>
 
 enum {
+	None, Unknown,
 	LitI8, LitU8, LitI16, LitU16, LitI32, LitU32, LitI64, LitU64, LitI128, LitU128,
 	LitLogic, LitF32, LitF64, LitChar, LitCChar, LitCString, LitString,
 	Word, Path,
 	Equal, NotEqual, Less, LessEqual, More, MoreEqual,
-	LeftShift, LLeftShift, RigthShift, RRigthShift,
+	LeftShift, RigthShift, Power,
 	Xor, Not, Add, Sub, Mul, Div, Mod, Rem, Or, And,
 	LeftParen, RightParen,
 	LeftBlock, RightBlock,
@@ -17,7 +18,7 @@ enum {
 	TypeI8, TypeU8, TypeI16, TypeU16, TypeI32, TypeU32, TypeI128, TypeU128, TypeLogic, TypeF32, TypeF64, TypeChar, TypeCString,
 };
 
-union Value
+union _Value
 {
 	int8_t i8;
 	uint8_t u8;
@@ -31,6 +32,7 @@ union Value
 	uint32_t u128[4];
 	float f32;
 	double f64;
+	uint8_t * data;
 };
 
 
@@ -40,10 +42,9 @@ typedef struct _token_symbol
 	uint8_t Error;
 	uint8_t Assgin;
 	uint32_t Hash;
-	uint32_t Start;
+	char* Start;
 	uint32_t Size;
-	union Value v;
-	uint8_t * data;
+	union _Value Value;
 } TSymbol, *pTSymbol;
 
 extern pTSymbol symbols;
