@@ -3,12 +3,9 @@
 #include <string.h>
 #include "token.h"
 
-uint64_t token;
-
 pTSymbol symbols;
 
-char *src, *old_src, *begin;
-uint32_t line = 0;
+char *src;
 
 uint32_t is_hex(uint8_t c) {
 	return ((c >= '0') && (c <= '9')) || ((c >= 'A') && (c <= 'Z'));
@@ -28,6 +25,14 @@ uint32_t is_separate(uint8_t c) {
 	return (c == 0) || (c == '\r') || (c == '\n') || (c == ' ') || (c == '\t') || c == ')' || c == ']';
 }
 
+uint32_t is_space(uint8_t c) {
+	return (c == 0) || (c == '\r') || (c == '\n') || (c == ' ') || (c == '\t');
+}
+
+uint32_t is_line(uint8_t c) {
+	return (c == 0) || (c == '\r') || (c == '\n');
+}
+
 uint32_t match_separate(pTSymbol sym) {
 	if (is_separate(*src)) {
 		return 1;
@@ -36,114 +41,109 @@ uint32_t match_separate(pTSymbol sym) {
 	return 0;
 }
 
-uint32_t match_char(pTSymbol sym) {
-	sym->Token = LitChar;
-
-	if (src[1] == '^') {
-		if (src[2] == '(') {
-			if (src[3] == 'n' && src[4] == 'u' && src[5] == 'l' && src[6] == 'l' && src[7] == ')' && src[8] == '"') {
-				sym->Value.Char = '\x00';
-				src = src + 9;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+uint32_t get_char(const char* s, char* r, uint32_t *len) {
+	if (s[0] == '^') {
+		if (s[1] == '(') {
+			if (s[2] == 'n' && s[3] == 'u' && s[4] == 'l' && s[5] == 'l' && s[6] == ')') {
+				*r = '\x00';
+				*len = 7;
+				return 1;
 			}
-			if (src[3] == 'b' && src[4] == 'a' && src[5] == 'c' && src[6] == 'k' && src[7] == ')' && src[8] == '"') {
-				sym->Value.Char = '\x08';
-				src = src + 9;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (s[2] == 'b' && s[3] == 'a' && s[4] == 'c' && s[5] == 'k' && s[6] == ')') {
+				*r = '\x08';
+				*len = 7;
+				return 1;
 			}
-			if (src[3] == 't' && src[4] == 'a' && src[5] == 'b' && src[6] == ')' && src[7] == '"') {
-				sym->Value.Char = '\x09';
-				src = src + 8;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (s[2] == 't' && s[3] == 'a' && s[4] == 'b' && s[5] == ')') {
+				*r = '\x09';
+				*len = 6;
+				return 1;
 			}
-			if (src[3] == 'l' && src[4] == 'i' && src[5] == 'n' && src[6] == 'e' && src[7] == ')' && src[8] == '"') {
-				sym->Value.Char = '\x0A';
-				src = src + 9;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (s[2] == 'l' && s[3] == 'i' && s[4] == 'n' && s[5] == 'e' && s[6] == ')') {
+				*r = '\x0A';
+				*len = 7;
+				return 1;
 			}
-			if (src[3] == 'p' && src[4] == 'a' && src[5] == 'g' && src[6] == 'e' && src[7] == ')' && src[8] == '"') {
-				sym->Value.Char = '\x0C';
-				src = src + 9;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (s[2] == 'p' && s[3] == 'a' && s[4] == 'g' && s[5] == 'e' && s[6] == ')') {
+				*r = '\x0C';
+				*len = 7;
+				return 1;
 			}
-			if (src[3] == 'e' && src[4] == 's' && src[5] == 'c' && src[6] == ')' && src[7] == '"') {
-				sym->Value.Char = '\x1B';
-				src = src + 8;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (s[2] == 'e' && s[3] == 's' && s[4] == 'c' && s[5] == ')') {
+				*r = '\x1B';
+				*len = 6;
+				return 1;
 			}
-			if (src[3] == 'd' && src[4] == 'e' && src[5] == 'l' && src[6] == ')' && src[7] == '"') {
-				sym->Value.Char = '\x7F';
-				src = src + 8;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (s[2] == 'd' && s[3] == 'e' && s[4] == 'l' && s[5] == ')') {
+				*r = '\x7F';
+				*len = 6;
+				return 1;
 			}
-			if (is_hex(src[3]) && is_hex(src[4]) && src[5] == ')' && src[6] == '"') {
-				sym->Value.Char = ((src[3] & 15) + (src[3] >= 'A' ? 9 : 0)) * 16 + (src[4] & 15) + (src[4] >= 'A' ? 9 : 0);
-				src = src + 7;
-				sym->Size = (uint32_t)(src - sym->Start);
-				return match_separate(sym);
+			if (is_hex(s[2]) && is_hex(s[3]) && s[4] == ')') {
+				*r = ((s[2] & 15) + (s[2] >= 'A' ? 9 : 0)) * 16 + (s[3] & 15) + (s[3] >= 'A' ? 9 : 0);
+				*len = 5;
+				return 1;
 			}
-			src = src + 3;
-			while (*src != '"' && !is_separate(*src)) {
-				++src;
-			}
-			if (*src == '"') {
-				++src;
-			}
-			sym->Size = (uint32_t)(src - sym->Start);
-			sym->Error = 1;
+			*len = 2;
 			return 0;
 		}
-		if ((src[2] == '@') && (src[3] == '"')) {
-			sym->Value.Char = '\x00';
-			src = src + 4;
+		if (s[1] == '@') {
+			*r = '\x00';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '/') {
+			*r = '\x0A';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '-') {
+			*r = '\x09';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '~') {
+			*r = '\x7F';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '^') {
+			*r = '^';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] == '"') {
+			*r = '"';
+			*len = 2;
+			return 1;
+		}
+		if (s[1] >= 'A' && s[1] >= 'Z') {
+			*r = s[1] & 0x0F + 1;
+			*len = 2;
+			return 1;
+		}
+		*r = s[1];
+		*len = 2;
+		return 1;
+	}
+	*r = s[0];
+	*len = 1;
+	return 1;
+}
+
+uint32_t match_char(pTSymbol sym) {
+	uint32_t len, res;
+	char c;
+	sym->Token = LitChar;
+	res = get_char(src + 1, &sym->Value.Char, &len);
+	src = src + len + 1;
+	if (res == 1) {
+		if (src[0] == '"') {
+			src++;
 			sym->Size = (uint32_t)(src - sym->Start);
 			return match_separate(sym);
 		}
-		if ((src[2] == '/') && (src[3] == '"')) {
-			sym->Value.Char = '\x0A';
-			src = src + 4;
-			sym->Size = (uint32_t)(src - sym->Start);
-			return match_separate(sym);
-		}
-		if ((src[2] == '-') && (src[3] == '"')) {
-			sym->Value.Char = '\x09';
-			src = src + 4;
-			sym->Size = (uint32_t)(src - sym->Start);
-			return match_separate(sym);
-		}
-		if ((src[2] == '~') && (src[3] == '"')) {
-			sym->Value.Char = '\x7F';
-			src = src + 4;
-			sym->Size = (uint32_t)(src - sym->Start);
-			return match_separate(sym);
-		}
-		if ((src[2] == '^') && (src[3] == '"')) {
-			sym->Value.Char = '^';
-			src = src + 4;
-			sym->Size = (uint32_t)(src - sym->Start);
-			return match_separate(sym);
-		}
-		if ((src[2] == '"') && (src[3] == '"')) {
-			sym->Value.Char = '"';
-			src = src + 4;
-			sym->Size = (uint32_t)(src - sym->Start);
-			return match_separate(sym);
-		}
-		if (src[3] == '"' && src[2] >= 'A' && src[2] <= 'Z') {
-			sym->Value.Char = src[2] & 0x0F + 1;
-			src = src + 4;
-			sym->Size = (uint32_t)(src - sym->Start);
-			return match_separate(sym);
-		}
-		src = src + 2;
-		while (*src != '"' && !is_separate(*src)) {
+		while (!is_line(*src) && *src != '"') {
 			++src;
 		}
 		if (*src == '"') {
@@ -153,18 +153,16 @@ uint32_t match_char(pTSymbol sym) {
 		sym->Error = 1;
 		return 0;
 	}
-	if (src[2] == '"') {
-		sym->Value.Char = src[1];
-		src = src + 3;
+	if (res == 0) {
+		while (!is_line(*src) && *src != '"') {
+			++src;
+		}
+		if (*src == '"') {
+			++src;
+		}
 		sym->Size = (uint32_t)(src - sym->Start);
-		return match_separate(sym);
-	}
-	src = src + 1;
-	while (*src != '"' && !is_separate(*src)) {
-		++src;
-	}
-	if (*src == '"') {
-		++src;
+		sym->Error = 1;
+		return 0;
 	}
 	sym->Size = (uint32_t)(src - sym->Start);
 	sym->Error = 1;
@@ -394,9 +392,54 @@ uint32_t match_hex(pTSymbol sym) {
 	return match_separate(sym);
 }
 
+uint32_t match_string(pTSymbol sym) {
+	char* s = malloc(128);
+	char c;
+	uint32_t count = 0, len, res;
+	sym->Token = LitString;
+	while(1) {
+		res = get_char(src, &c, &len);
+		src = src + len;
+		if (res == 0) {
+			while (!is_line(*src) && *src != '"') {
+				++src;
+			}
+			if (*src == '"') {
+				++src;
+			}
+			sym->Error = 1;
+			sym->Size = (uint32_t)(src - sym->Start);
+			free(s);
+			return 0;
+		}
+		s[count++] = c;
+		if (*src == '"') {
+			++src;
+			sym->Size = (uint32_t)(src - sym->Start);
+			s[count] = 0;
+			sym->Value.data = s;
+			return 1;
+		}
+		if (is_line(*src)) {
+			sym->Error = 1;
+			sym->Size = (uint32_t)(src - sym->Start);
+			free(s);
+			return 0;
+		}
+	}
+	sym->Error = 1;
+	sym->Size = (uint32_t)(src - sym->Start);
+	free(s);
+	return 1;
+}
+
+uint32_t match_cstring(pTSymbol sym) {
+
+	return 1;
+}
+
 void init(char* c) {
 	src = c;
-	begin = c;
 }
 
 TSymbol next(void) {
@@ -444,8 +487,20 @@ TSymbol next(void) {
 			}
 		}
 
-		if ((c == '0') && src[0] == '#') {
+		if (c == '0' && src[0] == '#') {
 			if (match_hex(&sym) || sym.Error) {
+				return sym;
+			}
+		}
+
+		if (c == '"') {
+			if (match_string(&sym) || sym.Error) {
+				return sym;
+			}
+		}
+
+		if (c == '@' && src[0] == '"') {
+			if (match_cstring(&sym) || sym.Error) {
 				return sym;
 			}
 		}
@@ -499,6 +554,10 @@ void display(pTSymbol sym) {
 		printf("%s: %X, <%c>\n", get_name(sym->Token), sym->Value.Char, sym->Value.Char);
 		return;
 	}
+	if (sym->Token == LitString) {
+		printf("%s: %s\n", get_name(sym->Token), sym->Value.data);
+		return;
+	}
 	if (sym->Token == LitU8) {
 		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u8, sym->Value.u8);
 		return;
@@ -527,6 +586,8 @@ char* get_name(uint32_t t) {
 	{
 	case LitChar:
 		return "LitChar";
+	case LitString:
+		return "LitString";
 	case LitU8:
 		return "LitU8";
 	case LitU16:
