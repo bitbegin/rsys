@@ -28,8 +28,10 @@ union _Value
 	uint16_t u16;
 	int32_t i32;
 	uint32_t u32;
-	int32_t i128[4];
-	uint32_t u128[4];
+	int64_t i64;
+	uint64_t u64;
+	int64_t i128[2];
+	uint64_t u128[2];
 	float f32;
 	double f64;
 	uint8_t * data;

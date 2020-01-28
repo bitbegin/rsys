@@ -3,7 +3,7 @@
 
 int main(int argc, char **argv) {
 	TSymbol symbol;
-	init("#\"^/\" + - * / \\ // ^ ~ < << <> = <= > >= >> (abc + def)");
+	init("#\"^/\" + - * / \\ // ^ ~ < << <> = <= > >= >> (0#1234 + 0#FFFFFFFF)");
 	while (1) {
 		symbol = next();
 		if (symbol.Token == None) {

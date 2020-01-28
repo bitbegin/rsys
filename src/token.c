@@ -25,14 +25,11 @@ uint32_t is_other_word(uint8_t c) {
 }
 
 uint32_t is_separate(uint8_t c) {
-	return (c == 0) || (c == '\r') || (c == '\n') || (c == ' ') || (c == '\t');
+	return (c == 0) || (c == '\r') || (c == '\n') || (c == ' ') || (c == '\t') || c == ')' || c == ']';
 }
 
 uint32_t match_separate(pTSymbol sym) {
 	if (is_separate(*src)) {
-		if (*src != 0) {
-			src = src + 1;
-		}
 		return 1;
 	}
 	sym->Error = 1;
@@ -301,6 +298,102 @@ uint32_t match_one_op(char c, pTSymbol sym) {
 	return 0;
 }
 
+uint32_t is_digit(char c) {
+	return c >= '0' && c <= '9';
+}
+
+uint8_t hex_to_u8(char* s) {
+	return ((s[0] & 15) + (s[0] >= 'A' ? 9 : 0)) * 16 + ((s[1] & 15) + (s[1] >= 'A' ? 9 : 0));
+}
+
+uint32_t match_hex(pTSymbol sym) {
+	char* s;
+	int32_t c = 0;
+	++src;
+	s = src;
+	while(is_hex(src[0])) {
+		c++;
+		++src;
+	}
+	if (c == 2) {
+		sym->Token = LitU8;
+		sym->Value.u8 = hex_to_u8(s);
+		sym->Size = (uint32_t)(src - sym->Start);
+		return match_separate(sym);
+	}
+	if (c == 4) {
+		sym->Token = LitU16;
+		sym->Value.u16 = hex_to_u8(s);
+		sym->Value.u16 = (sym->Value.u16 * 256) + hex_to_u8(s + 2);
+		sym->Size = (uint32_t)(src - sym->Start);
+		return match_separate(sym);
+	}
+	if (c == 8) {
+		sym->Token = LitU32;
+		sym->Value.u32 = hex_to_u8(s);
+		sym->Value.u32 = (sym->Value.u32 * 256) + hex_to_u8(s + 2);
+		sym->Value.u32 = (sym->Value.u32 * 256) + hex_to_u8(s + 4);
+		sym->Value.u32 = (sym->Value.u32 * 256) + hex_to_u8(s + 6);
+		sym->Size = (uint32_t)(src - sym->Start);
+		return match_separate(sym);
+	}
+	/*
+	if (c == 16) {
+		sym->Token = LitU64;
+		sym->Value.u64 = hex_to_u8(s);
+		c -= 2;
+		char* s2 = s + 2;
+		while (c > 0) {
+			sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s2);
+			c -= 2;
+			s2 += 2;
+		}
+		sym->Size = (uint32_t)(src - sym->Start);
+		return match_separate(sym);
+	}
+	*/
+	if (c == 16) {
+		sym->Token = LitU64;
+		sym->Value.u64 = hex_to_u8(s);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 2);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 4);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 6);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 8);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 10);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 12);
+		sym->Value.u64 = (sym->Value.u64 * 256) + hex_to_u8(s + 14);
+		sym->Size = (uint32_t)(src - sym->Start);
+		return match_separate(sym);
+	}
+
+	if (c == 32) {
+		sym->Token = LitU128;
+		sym->Value.u128[0] = hex_to_u8(s);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 2);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 4);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 6);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 8);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 10);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 12);
+		sym->Value.u128[0] = (sym->Value.u128[0] * 256) + hex_to_u8(s + 14);
+		s = s + 16;
+		sym->Value.u128[1] = hex_to_u8(s);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 2);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 4);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 6);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 8);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 10);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 12);
+		sym->Value.u128[1] = (sym->Value.u128[1] * 256) + hex_to_u8(s + 14);
+		sym->Size = (uint32_t)(src - sym->Start);
+		return match_separate(sym);
+	}
+	sym->Token = LitU32;
+	sym->Error = 1;
+	sym->Size = (uint32_t)(src - sym->Start);
+	return match_separate(sym);
+}
+
 void init(char* c) {
 	src = c;
 	begin = c;
@@ -347,6 +440,12 @@ TSymbol next(void) {
 		}
 		if (is_one_op(c)) {
 			if (match_one_op(c, &sym) || sym.Error) {
+				return sym;
+			}
+		}
+
+		if ((c == '0') && src[0] == '#') {
+			if (match_hex(&sym) || sym.Error) {
 				return sym;
 			}
 		}
@@ -400,6 +499,26 @@ void display(pTSymbol sym) {
 		printf("%s: %X, <%c>\n", get_name(sym->Token), sym->Value.Char, sym->Value.Char);
 		return;
 	}
+	if (sym->Token == LitU8) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u8, sym->Value.u8);
+		return;
+	}
+	if (sym->Token == LitU16) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u16, sym->Value.u16);
+		return;
+	}
+	if (sym->Token == LitU32) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u32, sym->Value.u32);
+		return;
+	}
+	if (sym->Token == LitU64) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u64, sym->Value.u64);
+		return;
+	}
+	if (sym->Token == LitU128) {
+		printf("%s: %X ' %X\n", get_name(sym->Token), sym->Value.u128, sym->Value.u128);
+		return;
+	}
 	printf("%s\n", get_name(sym->Token));
 }
 
@@ -408,6 +527,16 @@ char* get_name(uint32_t t) {
 	{
 	case LitChar:
 		return "LitChar";
+	case LitU8:
+		return "LitU8";
+	case LitU16:
+		return "LitU16";
+	case LitU32:
+		return "LitU32";
+	case LitU64:
+		return "LitU64";
+	case LitU128:
+		return "LitU128";
 	case Issue:
 		return "Issue";
 	case Equal:
