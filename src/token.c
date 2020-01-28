@@ -265,7 +265,7 @@ uint32_t match_issue(pTSymbol sym) {
 	}
 	if (*src == ':') {
 		++src;
-		sym->Assgin = 1;
+		sym->Assign = 1;
 	}
 	sym->Size = (uint32_t)(src - sym->Start);
 	return match_separate(sym);
@@ -305,13 +305,13 @@ uint32_t match_two_op(char c, pTSymbol sym) {
 	if (src[1] == ':') {
 		if (is_separate(src[1])) {
 			src = src + 2;
-			sym->Assgin = 1;
+			sym->Assign = 1;
 			sym->Size = (uint32_t)(src - sym->Start);
 			return match_separate(sym);
 		}
 		src = src + 2;
 		sym->Size = (uint32_t)(src - sym->Start);
-		sym->Assgin = 1;
+		sym->Assign = 1;
 		sym->Error = 1;
 		return 0;
 	}
@@ -371,13 +371,13 @@ uint32_t match_one_op(char c, pTSymbol sym) {
 	if (src[0] == ':') {
 		if (is_separate(src[1])) {
 			src = src + 1;
-			sym->Assgin = 1;
+			sym->Assign = 1;
 			sym->Size = (uint32_t)(src - sym->Start);
 			return match_separate(sym);
 		}
 		src = src + 1;
 		sym->Size = (uint32_t)(src - sym->Start);
-		sym->Assgin = 1;
+		sym->Assign = 1;
 		sym->Error = 1;
 		return 0;
 	}
@@ -481,9 +481,9 @@ uint32_t match_hex(pTSymbol sym) {
 }
 
 uint32_t match_string(pTSymbol sym, uint32_t c_string) {
-	char* s = malloc(128);
 	char c;
-	uint32_t count = 0, len, res;
+	uint32_t count = 0, len, res, size = 16;
+	char* s = malloc(size);
 	if (c_string) {
 		sym->Token = LitCString;
 	} else {
@@ -509,6 +509,12 @@ uint32_t match_string(pTSymbol sym, uint32_t c_string) {
 			return 0;
 		}
 		s[count++] = c;
+		if (count >= size) {
+			char* n = malloc((count / 16 + 1) * 16);
+			memcpy(n, s, count);
+			free(s);
+			s = n;
+		}
 		if (*src == '"') {
 			++src;
 			sym->Size = (uint32_t)(src - sym->Start);
@@ -541,7 +547,7 @@ TSymbol next(void) {
 	uint32_t path = 0;
 	sym.Token = None;
 	sym.Error = 0;
-	sym.Assgin = 0;
+	sym.Assign = 0;
 	while(c = *src) {
 		sym.Start = src;
 		++src;
@@ -680,7 +686,33 @@ void display(pTSymbol sym) {
 		printf("%s: %X ' %X\n", get_name(sym->Token), sym->Value.u128, sym->Value.u128);
 		return;
 	}
-	printf("%s\n", get_name(sym->Token));
+	if (sym->Token == LitI8) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u8, sym->Value.i8);
+		return;
+	}
+	if (sym->Token == LitI16) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u16, sym->Value.i16);
+		return;
+	}
+	if (sym->Token == LitI32) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u32, sym->Value.i32);
+		return;
+	}
+	if (sym->Token == LitI64) {
+		printf("%s: %d, %X\n", get_name(sym->Token), sym->Value.u64, sym->Value.i64);
+		return;
+	}
+	if (sym->Token == LitI128) {
+		printf("%s: %X ' %X\n", get_name(sym->Token), sym->Value.u128, sym->Value.i128);
+		return;
+	}
+	char* a;
+	if (sym->Assign) {
+		a = ", Assgin";
+	} else {
+		a = "";
+	}
+	printf("%s%s\n", get_name(sym->Token), a);
 }
 
 char* get_name(uint32_t t) {
@@ -704,6 +736,16 @@ char* get_name(uint32_t t) {
 		return "LitU64";
 	case LitU128:
 		return "LitU128";
+	case LitI8:
+		return "LitI8";
+	case LitI16:
+		return "LitI16";
+	case LitI32:
+		return "LitI32";
+	case LitI64:
+		return "LitI64";
+	case LitI128:
+		return "LitI128";
 	case Issue:
 		return "Issue";
 	case Equal:

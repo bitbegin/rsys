@@ -42,7 +42,7 @@ typedef struct _token_symbol
 {
 	uint16_t Token;
 	uint8_t Error;
-	uint8_t Assgin;
+	uint8_t Assign;
 	uint32_t Hash;
 	char* Start;
 	uint32_t Size;
