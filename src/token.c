@@ -869,6 +869,43 @@ TSymbol next(void) {
 			}
 		}
 
+		if (c == ':') {
+			c = *src;
+			++src;
+			if (is_one_word(c)) {
+				if (*src == '/') {
+					++src;
+					match_path(&sym);
+					sym.Token = GetPath;
+					if (sym.Assign) {
+						sym.Error = 1;
+					}
+					return sym;
+				}
+				if (is_separate(*src) || *src == ':') {
+					match_one_word(c, &sym);
+					sym.Token = GetWord;
+					if (sym.Assign) {
+						sym.Error = 1;
+					}
+					return sym;
+				}
+			}
+			if (is_first_word(c) && is_other_word(*src)) {
+				match_more_word(&sym);
+				sym.Token = GetPath;
+				if (sym.Assign) {
+						sym.Error = 1;
+				}
+				return sym;
+			}
+			--src;
+			sym.Token = GetWord;
+			sym.Error = 1;
+			sym.Size = (uint32_t) (src - sym.Start);
+			return sym;
+		}
+
 		if (c == '0' && src[0] == '#') {
 			match_hex(&sym);
 			return sym;
@@ -1035,6 +1072,14 @@ void display(pTSymbol sym) {
 		printf("%s: %s%s\n", get_name(sym->Token), sym->Value.data, a);
 		return;
 	}
+	if (sym->Token == GetWord) {
+		printf("%s: %s%s\n", get_name(sym->Token), sym->Value.data, a);
+		return;
+	}
+	if (sym->Token == GetPath) {
+		printf("%s: %s%s\n", get_name(sym->Token), sym->Value.data, a);
+		return;
+	}
 	printf("%s%s\n", get_name(sym->Token), a);
 }
 
@@ -1077,6 +1122,10 @@ char* get_name(uint32_t t) {
 		return "Word";
 	case Path:
 		return "Path";
+	case GetWord:
+		return "GetWord";
+	case GetPath:
+		return "GetPath";
 	case Issue:
 		return "Issue";
 	case Equal:

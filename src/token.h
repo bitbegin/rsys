@@ -7,7 +7,7 @@ enum {
 	None, Unknown,
 	LitI8, LitU8, LitI16, LitU16, LitI32, LitU32, LitI64, LitU64, LitI128, LitU128,
 	LitLogic, LitF32, LitF64, LitChar, LitCChar, LitCString, LitString,
-	Word, Path,
+	Word, Path, GetWord, GetPath,
 	Equal, NotEqual, Less, LessEqual, More, MoreEqual,
 	LeftShift, RigthShift, Power,
 	Xor, Not, Add, Sub, Mul, Div, Mod, Rem, Or, And,
