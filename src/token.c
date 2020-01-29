@@ -712,6 +712,32 @@ uint32_t match_number(pTSymbol sym) {
 	return match_separate(sym);
 }
 
+uint32_t is_one_word(char c) {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+uint32_t match_one_word(char c, pTSymbol sym) {
+	sym->Token = Word;
+	if (src[0] == ':') {
+		src = src + 1;
+		sym->Size = (uint32_t)(src - sym->Start);
+		sym->Assign = 1;
+		if (is_separate(src[1])) {
+			char* p = malloc(2);
+			p[0] = c; p[1] = 0;
+			sym->Value.data = p;
+			return 1;
+		}
+		sym->Error = 1;
+		return 0;
+	}
+	sym->Size = (uint32_t)(src - sym->Start);
+	char* p = malloc(2);
+	p[0] = c; p[1] = 0;
+	sym->Value.data = p;
+	return 1;
+}
+
 void init(char* c) {
 	src = c;
 }
@@ -784,6 +810,11 @@ TSymbol next(void) {
 
 		if ((c >= '0' && c <= '9') || (c == '-' && src[0] >= '0' && src[0] <= '9')) {
 			match_number(&sym);
+			return sym;
+		}
+
+		if (is_one_word(c) && (is_separate(*src) || *src == ':')) {
+			match_one_word(c, &sym);
 			return sym;
 		}
 
@@ -902,6 +933,10 @@ void display(pTSymbol sym) {
 	} else {
 		a = "";
 	}
+	if (sym->Token == Word) {
+		printf("%s: %s%s\n", get_name(sym->Token), sym->Value.data, a);
+		return;
+	}
 	printf("%s%s\n", get_name(sym->Token), a);
 }
 
@@ -940,6 +975,10 @@ char* get_name(uint32_t t) {
 		return "LitF32";
 	case LitF64:
 		return "LitF64";
+	case Word:
+		return "Word";
+	case Path:
+		return "Path";
 	case Issue:
 		return "Issue";
 	case Equal:
