@@ -535,6 +535,183 @@ uint32_t match_string(pTSymbol sym, uint32_t c_string) {
 	return 1;
 }
 
+uint32_t match_number(pTSymbol sym) {
+	uint32_t dot = 0;
+	uint32_t exp = 0;
+	uint32_t follow = 0;
+	double f;
+	int64_t l;
+
+	while (1) {
+		if (*src == '.') {
+			dot += 1;
+		} else if (*src == 'E') {
+			exp += 1;
+		} else if (is_separate(*src)) {
+			break;
+		} else if (*src == 'u' || *src == 'i' || *src == 'f' || *src == 'B' || *src == 'D' || *src == 'U') {
+			follow = 1;
+			break;
+		}
+		++src;
+	}
+
+	if (dot > 1 || exp > 1) {
+		while(!is_separate(*src)) {++src;}
+		sym->Token = LitF32;
+		sym->Error = 1;
+		sym->Size = (uint32_t)(src - sym->Start);
+		return 0;
+	}
+
+	uint32_t size = (uint32_t)(src - sym->Start);
+	char* buf = malloc(size + 1);
+	memcpy(buf, sym->Start, size);
+	buf[size] = 0;
+
+	if (dot == 1 || exp == 1) {
+		f = atof(buf);
+	} else {
+		l = atol(buf);
+	}
+	free(buf);
+
+	if (follow) {
+		if (src[0] == 'u') {
+			if (*sym->Start == '-') {
+				while(!is_separate(*src)) {++src;}
+				sym->Token = LitF32;
+				sym->Error = 1;
+				sym->Size = (uint32_t)(src - sym->Start);
+				return 0;
+			}
+			if (dot == 1 || exp == 1) {
+				l = (int64_t) f;
+				sym->Error = 1;
+			}
+			if (src[1] == '8') {
+				sym->Token = LitU8;
+				sym->Value.u8 = l & 0xFF;
+				src = src + 2;
+			} else if (src[1] == '1' && src[2] == '6') {
+				sym->Token = LitU16;
+				sym->Value.u16 = l & 0xFFFF;
+				src = src + 3;
+			} else if (src[1] == '3' && src[2] == '2') {
+				sym->Token = LitU32;
+				sym->Value.u32 = l & 0xFFFFFFFF;
+				src = src + 3;
+			} else if (src[1] == '6' && src[2] == '4') {
+				sym->Token = LitU64;
+				sym->Value.u64 = l;
+				src = src + 3;
+			} else if (src[1] == '1' && src[2] == '2' && src[3] == '8') {
+				sym->Token = LitU128;
+				sym->Value.u128[0] = 0;
+				sym->Value.u128[1] = l;
+				src = src + 4;
+			} else {
+				while(!is_separate(*src)) {++src;}
+				sym->Token = LitU32;
+				sym->Error = 1;
+				sym->Size = (uint32_t)(src - sym->Start);
+				return 0;
+			}
+		} else if (src[0] == 'i') {
+			if (dot == 1 || exp == 1) {
+				l = (int64_t) f;
+				sym->Error = 1;
+			}
+			if (src[1] == '8') {
+				sym->Token = LitI8;
+				sym->Value.i8 = l;
+				src = src + 2;
+			} else if (src[1] == '1' && src[2] == '6') {
+				sym->Token = LitI16;
+				sym->Value.i16 = l;
+				src = src + 3;
+			} else if (src[1] == '3' && src[2] == '2') {
+				sym->Token = LitI32;
+				sym->Value.i32 = l;
+				src = src + 3;
+			} else if (src[1] == '6' && src[2] == '4') {
+				sym->Token = LitI64;
+				sym->Value.i64 = l;
+				src = src + 3;
+			} else if (src[1] == '1' && src[2] == '2' && src[3] == '8') {
+				sym->Token = LitI128;
+				sym->Value.i128[0] = 0;
+				sym->Value.i128[1] = l;
+				src = src + 4;
+			} else {
+				while(!is_separate(*src)) {++src;}
+				sym->Token = LitI32;
+				sym->Error = 1;
+				sym->Size = (uint32_t)(src - sym->Start);
+				return 0;
+			}
+		} else if (src[0] == 'f') {
+			if (dot == 0 && exp == 0) {
+				f = (double) l;
+			}
+			if (src[1] == '3' && src[2] == '2') {
+				sym->Token = LitF32;
+				sym->Value.f32 = f;
+				src = src + 3;
+			} else if (src[1] == '6' && src[2] == '4') {
+				sym->Token = LitF64;
+				sym->Value.f64 = f;
+				src = src + 3;
+			} else {
+				while(!is_separate(*src)) {++src;}
+				sym->Token = LitF32;
+				sym->Error = 1;
+				sym->Size = (uint32_t)(src - sym->Start);
+				return 0;
+			}
+		} else if (src[0] == 'B') {
+			if (dot == 1 || exp == 1) {
+				l = (int64_t) f;
+				sym->Error = 1;
+			}
+			sym->Token = LitU8;
+			sym->Value.u8 = l & 0xFF;
+			src = src + 1;
+		} else if (src[0] == 'U') {
+			if (dot == 1 || exp == 1) {
+				l = (int64_t) f;
+				sym->Error = 1;
+			}
+			sym->Token = LitU32;
+			sym->Value.u32 = l & 0xFFFFFFFF;
+			src = src + 1;
+		} else if (src[0] == 'D') {
+			if (dot == 0 && exp == 0) {
+				f = (double) l;
+			}
+			sym->Token = LitF64;
+			sym->Value.f64 = f;
+			src = src + 1;
+		} else {
+			while(!is_separate(*src)) {++src;}
+			sym->Token = LitU32;
+			sym->Error = 1;
+			sym->Size = (uint32_t)(src - sym->Start);
+			return 0;
+		}
+	} else {
+		if (dot == 0 && exp == 0) {
+			sym->Token = LitI32;
+			sym->Value.i32 = l;
+		} else {
+			sym->Token = LitF32;
+			sym->Value.f32 = f;
+		}
+	}
+
+	return match_separate(sym);
+}
+
 void init(char* c) {
 	src = c;
 }
@@ -602,6 +779,11 @@ TSymbol next(void) {
 
 		if (c == '+' && src[0] == '"') {
 			match_char(&sym, 1);
+			return sym;
+		}
+
+		if ((c >= '0' && c <= '9') || (c == '-' && src[0] >= '0' && src[0] <= '9')) {
+			match_number(&sym);
 			return sym;
 		}
 
@@ -683,7 +865,7 @@ void display(pTSymbol sym) {
 		return;
 	}
 	if (sym->Token == LitU128) {
-		printf("%s: %X ' %X\n", get_name(sym->Token), sym->Value.u128, sym->Value.u128);
+		printf("%s: %d\n", get_name(sym->Token), sym->Value.u128[1]);
 		return;
 	}
 	if (sym->Token == LitI8) {
@@ -703,7 +885,15 @@ void display(pTSymbol sym) {
 		return;
 	}
 	if (sym->Token == LitI128) {
-		printf("%s: %X ' %X\n", get_name(sym->Token), sym->Value.u128, sym->Value.i128);
+		printf("%s: %d\n", get_name(sym->Token), sym->Value.u128[1]);
+		return;
+	}
+	if (sym->Token == LitF32) {
+		printf("%s: %f\n", get_name(sym->Token), sym->Value.f32);
+		return;
+	}
+	if (sym->Token == LitF64) {
+		printf("%s: %f\n", get_name(sym->Token), sym->Value.f64);
 		return;
 	}
 	char* a;
@@ -746,6 +936,10 @@ char* get_name(uint32_t t) {
 		return "LitI64";
 	case LitI128:
 		return "LitI128";
+	case LitF32:
+		return "LitF32";
+	case LitF64:
+		return "LitF64";
 	case Issue:
 		return "Issue";
 	case Equal:
