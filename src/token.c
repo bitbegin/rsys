@@ -18,11 +18,11 @@ uint32_t is_first_word(uint8_t c) {
 
 // [0-9a-zA-Z_=~&`!.*+|?]
 uint32_t is_other_word(uint8_t c) {
-	return ((c >= '0') && (c <= '9')) || is_other_word(c);
+	return ((c >= '0') && (c <= '9')) || is_first_word(c);
 }
 
 uint32_t is_separate(uint8_t c) {
-	return (c == 0) || (c == '\r') || (c == '\n') || (c == ' ') || (c == '\t') || c == ')' || c == ']';
+	return (c == 0) || (c == '\r') || (c == '\n') || (c == ' ') || (c == '\t') || c == ')' || c == ']' || c == ';';
 }
 
 uint32_t is_space(uint8_t c) {
@@ -262,10 +262,6 @@ uint32_t match_issue(pTSymbol sym) {
 
 	while (*src != 0 && is_other_word(*src)) {
 		++src;
-	}
-	if (*src == ':') {
-		++src;
-		sym->Assign = 1;
 	}
 	sym->Size = (uint32_t)(src - sym->Start);
 	return match_separate(sym);
@@ -722,7 +718,7 @@ uint32_t match_one_word(char c, pTSymbol sym) {
 		src = src + 1;
 		sym->Size = (uint32_t)(src - sym->Start);
 		sym->Assign = 1;
-		if (is_separate(src[1])) {
+		if (is_separate(src[0])) {
 			char* p = malloc(2);
 			p[0] = c; p[1] = 0;
 			sym->Value.data = p;
@@ -736,6 +732,88 @@ uint32_t match_one_word(char c, pTSymbol sym) {
 	p[0] = c; p[1] = 0;
 	sym->Value.data = p;
 	return 1;
+}
+
+uint32_t match_path(pTSymbol sym) {
+	sym->Token = Path;
+	if (is_separate(*src)) {
+		sym->Size = (uint32_t)(src - sym->Start);
+		sym->Error = 1;
+		return 0;
+	}
+	while(1) {
+		if (is_separate(*src)) {
+			sym->Size = (uint32_t)(src - sym->Start);
+			char* p = malloc(sym->Size + 1);
+			memcpy(p, sym->Start, sym->Size);
+			p[sym->Size] = 0;
+			sym->Value.data = p;
+			return 1;
+		}
+		if (*src == ':') {
+			++src;
+			sym->Assign = 1;
+			sym->Size = (uint32_t)(src - sym->Start);
+			char* p = malloc(sym->Size + 1);
+			memcpy(p, sym->Start, sym->Size);
+			p[sym->Size] = 0;
+			sym->Value.data = p;
+			return match_separate(sym);
+		}
+		if (*src == '/') {
+			++src;
+			if (src[1] == ':') {
+				sym->Size = (uint32_t)(src - sym->Start);
+				sym->Error = 1;
+				return 0;
+			}
+			if (is_separate(src[1])) {
+				sym->Size = (uint32_t)(src - sym->Start);
+				sym->Error = 1;
+				return 0;
+			}
+			continue;
+		}
+		if (!is_other_word(*src)) {
+			sym->Size = (uint32_t)(src - sym->Start);
+			sym->Error = 1;
+			return 0;
+		}
+		++src;
+	}
+
+	return 0;
+}
+
+uint32_t match_more_word(pTSymbol sym) {
+	sym->Token = Word;
+	while (1) {
+		if (is_separate(*src)) {
+			sym->Size = (uint32_t)(src - sym->Start);
+			char* p = malloc(sym->Size + 1);
+			memcpy(p, sym->Start, sym->Size);
+			p[sym->Size] = 0;
+			sym->Value.data = p;
+			return 1;
+		}
+		if (*src == ':') {
+			++src;
+			sym->Assign = 1;
+			sym->Size = (uint32_t)(src - sym->Start);
+			return match_separate(sym);
+		}
+		if (*src == '/') {
+			++src;
+			return match_path(sym);
+		}
+		if (!is_other_word(*src)) {
+			sym->Size = (uint32_t)(src - sym->Start);
+			sym->Error = 1;
+			return 0;
+		}
+		++src;
+	}
+	return 0;
 }
 
 void init(char* c) {
@@ -756,6 +834,10 @@ TSymbol next(void) {
 		++src;
 
 		if ((c == '\r') || (c == '\n') || (c == ' ') || (c == '\t')) {
+			continue;
+		}
+		if (c == ';') {
+			while (*src != '\n'){++src;}
 			continue;
 		}
 
@@ -813,8 +895,20 @@ TSymbol next(void) {
 			return sym;
 		}
 
-		if (is_one_word(c) && (is_separate(*src) || *src == ':')) {
-			match_one_word(c, &sym);
+		if (is_one_word(c)) {
+			if (*src == '/') {
+				++src;
+				match_path(&sym);
+				return sym;
+			}
+			if (is_separate(*src) || *src == ':') {
+				match_one_word(c, &sym);
+				return sym;
+			}
+		}
+
+		if (is_first_word(c) && is_other_word(*src)) {
+			match_more_word(&sym);
 			return sym;
 		}
 
@@ -934,6 +1028,10 @@ void display(pTSymbol sym) {
 		a = "";
 	}
 	if (sym->Token == Word) {
+		printf("%s: %s%s\n", get_name(sym->Token), sym->Value.data, a);
+		return;
+	}
+	if (sym->Token == Path) {
 		printf("%s: %s%s\n", get_name(sym->Token), sym->Value.data, a);
 		return;
 	}
